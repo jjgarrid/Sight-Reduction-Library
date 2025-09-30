@@ -56,6 +56,7 @@ htmlcov/
 
 # Environment variables
 .env
+env.backup
 
 # Logs
 *.log
