@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sight-reduction"
+version = "0.1.0"
+description = "Sight Reduction tools for Celestial Navigation"
+readme = "README.md"
+authors = [{name = "Sight Reduction Team", email = "dev@example.com"}]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Utilities"
+]
+dependencies = [
+    "astropy>=5.0",
+    "numpy>=1.21.0",
+    "matplotlib>=3.3.0",
+    "pandas>=1.3.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy"
+]
+
+[project.urls]
+Homepage = "https://github.com/username/sight-reduction"
+Repository = "https://github.com/username/sight-reduction"
+Documentation = "https://github.com/username/sight-reduction#readme"
+
+[project.scripts]
+sight-reduction = "src.main:main"
+sight-reduction-latex = "src.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true

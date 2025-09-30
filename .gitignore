@@ -1,0 +1,91 @@
+# AI Coder files
+Qwen.md
+AGENTS.md
+.cursor/rules/**
+.cursor/ignore/**
+.github/ISSUE_TEMPLATE/**
+.openaibot/**
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+logs/
+
+# LaTeX auxiliary files (if you're using LaTeX)
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.lof
+*.lot
+*.idx
+*.ind
+*.ilg
+*.pdfsync
+
+# Other AI-related files
+*.ai
+*.aider*
+.codacy-coverage/
+.deepsource.d/
+.gitpod.yml
+.replit
+.windsurf/
+cursor/

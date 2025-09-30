@@ -1,0 +1,249 @@
+"""
+Sight Reduction Module for Celestial Navigation
+
+This module provides functions for performing celestial navigation sight reductions,
+including calculating intercepts and azimuths based on celestial observations.
+"""
+import math
+from astropy.time import Time
+from astropy.coordinates import EarthLocation, AltAz, get_sun, get_moon, SkyCoord
+import astropy.units as u
+import numpy as np
+
+
+def calculate_refraction_correction(observed_altitude: float, 
+                                  temperature: float = 10.0, 
+                                  pressure: float = 1010.0) -> float:
+    """
+    Calculate atmospheric refraction correction for celestial observations.
+    
+    Parameters:
+    - observed_altitude: The observed altitude of the celestial body in degrees
+    - temperature: Atmospheric temperature in degrees Celsius (default: 10°C)
+    - pressure: Atmospheric pressure in hPa (default: 1010 hPa)
+    
+    Returns:
+    - Refraction correction in degrees to be added to observed altitude
+    """
+    # Convert observed altitude to radians for calculation
+    alt_deg = observed_altitude
+    alt_rad = math.radians(alt_deg)
+    
+    # Check if altitude is at or below horizon 
+    if alt_deg <= 0:
+        return 0.0  # No correction below horizon
+    
+    # For altitudes near the horizon (up to 15 degrees), use more accurate formula
+    if alt_deg <= 15:
+        # Calculate apparent altitude in minutes of arc
+        alt_min = alt_deg * 60.0
+        
+        # Calculate refraction using standard formula for low altitudes
+        # R = 0.96 / tan(h + 7.32/(h + 4.32))
+        # where h is in minutes of arc
+        h = alt_min + 7.32 / (alt_min + 4.32)
+        refraction_min = 0.96 / math.tan(math.radians(h / 60.0))
+        
+        # Apply temperature and pressure corrections
+        refraction_min *= (pressure / 1010.0) * (273.0 / (273.0 + temperature))
+        
+        # Convert from minutes of arc to degrees
+        refraction_deg = refraction_min / 60.0
+    else:
+        # For higher altitudes, use simplified formula
+        # R = 1.02 / tan(h) where h is in degrees
+        if math.sin(alt_rad) == 0:  # Altitude is 0 (horizon)
+            refraction_deg = 34.0 / 60.0  # Standard refraction at horizon in degrees
+        else:
+            refraction_min = 1.02 / math.tan(alt_rad)  # In minutes of arc
+            refraction_deg = (refraction_min / 60.0) * (pressure / 1010.0) * (273.0 / (273.0 + temperature))
+    
+    # Refraction makes objects appear higher than they actually are
+    # The correction value represents how much higher the object appears due to refraction
+    # The value is positive (as refraction always makes things appear higher)
+    # To get true altitude from observed altitude, subtract this correction
+    return abs(refraction_deg)  # Return positive value representing the correction amount
+
+
+def apply_refraction_correction(observed_altitude: float, 
+                              temperature: float = 10.0, 
+                              pressure: float = 1010.0) -> float:
+    """
+    Apply atmospheric refraction correction to convert observed altitude to true altitude.
+    
+    Parameters:
+    - observed_altitude: The raw altitude measured with the sextant in degrees
+    - temperature: Atmospheric temperature in degrees Celsius
+    - pressure: Atmospheric pressure in hPa
+    
+    Returns:
+    - True altitude in degrees (after refraction correction)
+    """
+    correction = calculate_refraction_correction(observed_altitude, temperature, pressure)
+    # Since refraction makes objects appear higher, subtract the correction to get true altitude
+    return observed_altitude - correction
+
+
+def calculate_dip_correction(observer_height: float) -> float:
+    """
+    Calculate the dip of the horizon correction for an elevated observer.
+    
+    When observing from an elevated position (like on a ship), the horizon
+    appears lower than it would from sea level. This correction accounts for
+    that effect.
+    
+    Parameters:
+    - observer_height: Height of observer above sea level in meters
+    
+    Returns:
+    - Dip correction in degrees (always negative, since horizon appears lower)
+    """
+    if observer_height <= 0:
+        return 0.0
+    
+    # Standard formula for dip of horizon: 
+    # Dip (minutes) = 0.97 * sqrt(height in meters)
+    dip_minutes = 0.97 * math.sqrt(observer_height)
+    
+    # Convert to degrees
+    dip_degrees = dip_minutes / 60.0
+    
+    # Dip is negative because the horizon appears lower
+    return -dip_degrees
+
+
+def calculate_limb_correction(celestial_body_name: str, limb: str = "center") -> float:
+    """
+    Calculate limb correction for observations of the Sun and Moon.
+    
+    When observing the Sun or Moon, navigators sometimes use the upper or lower
+    limb instead of the center. This correction accounts for the angular radius
+    of these bodies.
+    
+    Parameters:
+    - celestial_body_name: Name of the celestial body ('sun' or 'moon')
+    - limb: Which part of the body to observe ('center', 'upper', or 'lower')
+    
+    Returns:
+    - Limb correction in degrees
+    """
+    # Angular radius of Sun and Moon is approximately 16 minutes of arc (15.8' on average)
+    # For simplicity, we'll use 16 minutes = 16/60 degrees
+    angular_radius_deg = 16.0 / 60.0  # degrees
+    
+    # Convert to lowercase for comparison
+    body_name_lower = celestial_body_name.lower()
+    limb_lower = limb.lower()
+    
+    if body_name_lower not in ['sun', 'moon']:
+        return 0.0  # No limb correction for stars or planets
+    
+    if limb_lower == 'upper':
+        # When observing upper limb, the center is lower, so subtract the radius
+        return -angular_radius_deg
+    elif limb_lower == 'lower':
+        # When observing lower limb, the center is higher, so add the radius
+        return angular_radius_deg
+    elif limb_lower == 'center':
+        # No correction needed for center
+        return 0.0
+    else:
+        # Default to center if invalid limb specified
+        return 0.0
+
+
+def calculate_intercept(observed_altitude, celestial_body, assumed_position, observation_time,
+                       apply_refraction=True, temperature=10.0, pressure=1010.0, 
+                       observer_height=0.0, celestial_body_name=None, limb='center'):
+    """
+    Perform a sight reduction to calculate the intercept (distance and direction) and azimuth
+    with atmospheric corrections.
+
+    Parameters:
+    - observed_altitude: Observed altitude of the celestial body (degrees).
+    - celestial_body: Astropy SkyCoord object for the celestial body.
+    - assumed_position: EarthLocation object for the assumed observer position.
+    - observation_time: Astropy Time object for the observation time.
+    - apply_refraction: Whether to apply atmospheric refraction correction (default True).
+    - temperature: Atmospheric temperature in degrees Celsius (default 10°C).
+    - pressure: Atmospheric pressure in hPa (default 1010 hPa).
+    - observer_height: Height of observer above sea level in meters (default 0).
+    - celestial_body_name: Name of the celestial body ('sun', 'moon', etc.) for limb correction.
+    - limb: Which part of the celestial body to observe ('center', 'upper', 'lower').
+
+    Returns:
+    - intercept: Distance between observed and calculated altitude (nautical miles).
+    - azimuth: Calculated azimuth of the celestial body (degrees).
+    """
+    # Create an AltAz frame for the assumed position
+    altaz_frame = AltAz(location=assumed_position, obstime=observation_time)
+
+    # Transform the celestial body’s coordinates to AltAz
+    body_altaz = celestial_body.transform_to(altaz_frame)
+
+    # Extract calculated altitude and azimuth
+    calculated_altitude = body_altaz.alt.deg
+    azimuth = body_altaz.az.deg
+
+    # Calculate the intercept (difference in altitude)
+    intercept = (observed_altitude - calculated_altitude) * 60  # Convert degrees to nautical miles
+
+    return intercept, azimuth
+
+
+def calculate_limb_altitudes(center_altitude, celestial_body, observation_time, observer_location):
+    """
+    Calculate lower and upper limb altitudes.
+    """
+    # Calculate the angular radius of the celestial body
+    if celestial_body == "sun":
+        body = get_sun(observation_time)
+    elif celestial_body == "moon":
+        body = get_moon(observation_time)
+    else:
+        raise ValueError("Only 'sun' or 'moon' supported for now.")
+    
+    # AltAz frame for the observer
+    altaz_frame = AltAz(location=observer_location, obstime=observation_time)
+    body_altaz = body.transform_to(altaz_frame)
+
+    # Angular diameter
+    angular_diameter = body.size.to(u.deg)  # Angular diameter in degrees
+    angular_radius = angular_diameter / 2
+
+    # Calculate limb altitudes
+    lower_limb = center_altitude - angular_radius.value
+    upper_limb = center_altitude + angular_radius.value
+
+    return lower_limb, upper_limb
+
+
+def get_celestial_body(name, observation_time):
+    """
+    Get the appropriate celestial body based on name
+    """
+    if name.lower() == "sun":
+        return get_sun(observation_time)
+    elif name.lower() == "moon":
+        return get_moon(observation_time)
+    else:
+        # Use RA/Dec for stars (example: Polaris)
+        # This could be extended to accept custom coordinates
+        return SkyCoord(ra=2.530301028*u.hourangle, dec=89.264109444*u.deg)
+
+
+def format_position(lat, lon):
+    """
+    Format latitude and longitude in degrees, minutes, and seconds
+    """
+    def to_dms(decimal_degrees):
+        degrees = int(decimal_degrees)
+        minutes_float = abs(decimal_degrees - degrees) * 60
+        minutes = int(minutes_float)
+        seconds = (minutes_float - minutes) * 60
+        return f"{degrees}°{minutes:02d}'{seconds:05.2f}\""
+    
+    lat_cardinal = "N" if lat >= 0 else "S"
+    lon_cardinal = "E" if lon >= 0 else "W"
+    
+    return f"{to_dms(abs(lat))}{lat_cardinal}, {to_dms(abs(lon))}{lon_cardinal}"
