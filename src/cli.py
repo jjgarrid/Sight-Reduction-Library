@@ -26,7 +26,10 @@ from src.problem_generator import (
 from src.latex_output import (
     generate_problem_pdf,
     generate_almanac_pdf,
-    generate_fix_pdf
+    generate_fix_pdf,
+    generate_booklet_pdf,
+    generate_almanac_annexes,
+    generate_and_save_plot
 )
 from src.almanac_integration import get_hourly_almanac_data
 
@@ -158,6 +161,21 @@ Examples:
     almanac_parser.add_argument('--output', '-o', default=None, 
                                help='Output PDF filename (default: {body}_almanac_{date}.pdf)')
     almanac_parser.add_argument('--output-dir', default='.', 
+                               help='Output directory (default: current directory)')
+    
+    # Booklet command
+    booklet_parser = subparsers.add_parser('booklet', help='Generate sight reduction booklet')
+    booklet_parser.add_argument('--type', choices=['morning', 'evening', 'star', 'moon', 'custom'], 
+                               default='morning', help='Type of sight problem to include in booklet (default: morning)')
+    booklet_parser.add_argument('--body', help='Celestial body name for custom sight (sun, moon, venus, etc.)')
+    booklet_parser.add_argument('--time', help='Observation time for custom sight (YYYY-MM-DDTHH:MM:SS)')
+    booklet_parser.add_argument('--with-answers', action='store_true',
+                               help='Include answer key in booklet')
+    booklet_parser.add_argument('--almanac-bodies', nargs='+', default=['sun', 'moon', 'venus'],
+                               help='Celestial bodies for almanac annexes (default: sun moon venus)')
+    booklet_parser.add_argument('--output', '-o', default='sight_reduction_booklet.pdf', 
+                               help='Output PDF filename (default: sight_reduction_booklet.pdf)')
+    booklet_parser.add_argument('--output-dir', default='.', 
                                help='Output directory (default: current directory)')
     
     return parser
@@ -349,6 +367,62 @@ def handle_generate_almanac(args):
     return output_path
 
 
+def handle_generate_booklet(args):
+    """Handle generation of sight reduction booklet."""
+    print(f"Generating sight reduction booklet...")
+    
+    # Generate the problem based on type
+    if args.type == 'morning':
+        problem = generate_morning_sight_problem()
+    elif args.type == 'evening':
+        problem = generate_evening_sight_problem()
+    elif args.type == 'star':
+        problem = generate_twilight_star_sight_problem(star_name=None)
+    elif args.type == 'moon':
+        problem = generate_moon_sight_problem()
+    elif args.type == 'custom':
+        if not args.body or not args.time:
+            print("Error: For custom sights, both --body and --time are required.")
+            return None
+        try:
+            observation_time = Time(args.time)
+        except Exception as e:
+            print(f"Error parsing time: {e}")
+            return None
+        problem = generate_sight_reduction_problem(
+            celestial_body_name=args.body,
+            observation_time=observation_time
+        )
+    else:
+        print("Error: Invalid booklet type specified.")
+        return None
+    
+    # Generate the plot
+    plot_path = generate_and_save_plot(
+        problem=problem,
+        output_dir=args.output_dir,
+        filename="booklet_plot.png"
+    )
+    
+    # Generate almanac annexes
+    date = datetime.now()
+    almanac_annexes = generate_almanac_annexes(args.almanac_bodies, date)
+    
+    # Generate the booklet PDF
+    output_path = generate_booklet_pdf(
+        problem=problem,
+        output_filename=args.output.replace('.pdf', ''),
+        output_dir=args.output_dir,
+        plot_path=plot_path,
+        almanac_pages=almanac_annexes,
+        include_answer_key=args.with_answers
+    )
+    
+    print(f"Sight reduction booklet generated successfully!")
+    print(f"PDF saved to: {output_path}")
+    return output_path
+
+
 def main():
     """Main entry point for the CLI."""
     parser = create_parser()
@@ -378,6 +452,9 @@ def main():
         
         elif args.command == 'almanac':
             handle_generate_almanac(args)
+        
+        elif args.command == 'booklet':
+            handle_generate_booklet(args)
         
         else:
             parser.print_help()

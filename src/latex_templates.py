@@ -311,6 +311,139 @@ Using the sight reduction method of your choice, calculate:
 \end{document}
 """
 
+# Template for sight reduction booklet
+SIGHT_REDUCTION_BOOKLET_TEMPLATE = r"""
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{float}
+
+% Page setup
+\geometry{margin=1in}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Celestial Navigation Practice}
+\lhead{Sight Reduction Booklet}
+\rfoot{\thepage}
+
+% Custom commands
+\newcommand{\sightentry}[2]{\textbf{#1:} & #2 \\}
+\newcommand{\tabitem}{~~\llap{\textbullet}~~}
+
+\titleformat{\section}
+{\normalfont\Large\bfseries}{\thesection}{1em}{}
+
+\begin{document}
+
+% Exercise Page
+\begin{center}
+{\Huge\textbf{SIGHT REDUCTION BOOKLET}} \\
+\vspace{0.5cm}
+{\large Celestial Navigation Practice Problems}
+\end{center}
+
+\section*{Exercise Page}
+
+\subsection*{Observation Details}
+
+\begin{tabular}{>{\bfseries}lp{10cm}}
+Celestial Body: & %(celestial_body_name)s%(limb_text)s \\
+Observation Time (UTC): & %(observation_time)s \\
+Observed Sextant Altitude: & %(observed_altitude)s \\
+\end{tabular}
+
+\vspace{1cm}
+
+\subsection*{Environmental Conditions}
+
+\begin{tabular}{>{\bfseries}lp{10cm}}
+Temperature: & %(temperature)s \textcelsius \\
+Atmospheric Pressure: & %(pressure)s hPa \\
+Observer Height: & %(observer_height)s meters \\
+\end{tabular}
+
+\vspace{1cm}
+
+\subsection*{Assumed Position}
+
+\begin{tabular}{>{\bfseries}lp{10cm}}
+Latitude: & %(assumed_lat)s \\
+Longitude: & %(assumed_lon)s \\
+\end{tabular}
+
+\vspace{1cm}
+
+\subsection*{Instrument Parameters}
+
+\begin{tabular}{>{\bfseries}lp{10cm}}
+Instrument Error: & %(instrument_error)s \\
+Index Error: & %(index_error)s \\
+Personal Error: & %(personal_error)s \\
+\end{tabular}
+
+\vspace{1cm}
+
+\subsection*{Task}
+
+Using the sight reduction method of your choice, calculate:
+\begin{enumerate}
+    \item The computed altitude ($H_c$) and azimuth ($Z_n$) for the assumed position
+    \item The intercept ($a$) and its direction (Toward/Away from the celestial body)
+    \item Plot the line of position on a plotting sheet
+\end{enumerate}
+
+\vspace{1cm}
+
+\begin{tikzpicture}[scale=0.8]
+  \draw[step=1cm,gray,very thin] (0,0) grid (12,8);
+  \draw[thick] (0,0) rectangle (12,8);
+  \node at (6,7.5) {\textbf{PLOTTING AREA}};
+  \node at (6,7) {Use this space to plot your line of position};
+\end{tikzpicture}
+
+\vspace{1cm}
+
+\subsection*{Solution Space}
+
+\vspace{8cm} % Leave space for calculations
+
+\newpage
+
+% Plot Page
+\section*{Sight Reduction Plot}
+
+%(plot_include)s
+
+\newpage
+
+% Annexes with Almanac Data
+\section*{Annexes}
+
+%(almanac_annexes)s
+
+%(additional_tables)s
+
+\newpage
+
+% Solution Page
+\section*{Exercise Solutions}
+
+%(solutions)s
+
+\end{document}
+"""
+
 # Function to format data for LaTeX templates
 def format_angle_for_latex(angle_degrees):
     """Format angle in degrees as D\textdegree M' S.S'' for LaTeX."""
