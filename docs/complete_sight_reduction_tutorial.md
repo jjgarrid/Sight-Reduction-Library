@@ -22,6 +22,17 @@ A sight reduction is the mathematical process used to convert these sextant obse
 - **Line of Position (LOP)**: A line on the chart along which the observer's position lies
 - **Assumed Position**: An approximate position, usually a round number, used for calculations
 
+### Aeronautical Navigation
+
+This software also supports celestial navigation from aircraft using specialized techniques and equipment. Key differences include:
+
+- **Bubble Sextant**: Instead of using the visible horizon, aircraft use a bubble sextant that provides an artificial horizon via a bubble mechanism
+- **Altitude Corrections**: Atmospheric refraction calculations account for the aircraft's altitude above sea level
+- **Movement Compensation**: Aircraft move rapidly, so position changes during the observation period must be accounted for
+- **Stability Challenges**: Aircraft motion and turbulence may affect observation accuracy, sometimes requiring multiple averaged observations
+
+The software includes both marine and aviation navigation modes, selectable through the `navigation_mode` parameter.
+
 ## Taking Sextant Observations
 
 Taking accurate sextant observations is crucial for successful celestial navigation. Here's a step-by-step guide:

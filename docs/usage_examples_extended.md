@@ -147,3 +147,105 @@ The new functionality includes additional parameters for more realistic navigati
 - `observation_quality`: Subjective rating of observation quality
 
 These parameters are automatically included in generated problems and affect the realism of the observations.
+
+## Aviation Examples
+
+### Example: Generate Aviation Sight Reduction Problems
+
+```python
+from src.problem_generator import generate_sight_reduction_problem
+
+# Generate an aviation-specific sight reduction problem
+aviation_problem = generate_sight_reduction_problem(
+    celestial_body_name='sun',
+    navigation_mode='aviation',  # Aviation mode with bubble sextant
+    aircraft_altitude=3000.0     # Flight altitude in meters
+)
+
+print(f"Aviation Sight Problem:")
+print(f"  Body: {aviation_problem['celestial_body_name']}")
+print(f"  Observed Altitude: {aviation_problem['observed_altitude']:.2f}°")
+print(f"  Aircraft Altitude: {aviation_problem['aircraft_altitude']:.0f} m")
+print(f"  Navigation Mode: {aviation_problem['navigation_mode']}")
+print(f"  Assumed Position: {aviation_problem['assumed_position'].lat.deg:+.3f}°, {aviation_problem['assumed_position'].lon.deg:+.3f}°")
+
+# Format the aviation problem for user display
+from src.problem_generator import format_problem_for_user
+formatted_aviation_problem = format_problem_for_user(aviation_problem)
+print(formatted_aviation_problem)
+```
+
+### Example: Generate Multiple Aviation Sights for Position Fix
+
+```python
+from src.problem_generator import generate_multi_body_sight_reduction_problems
+
+# Generate multiple aviation sight reduction problems
+aviation_problems = generate_multi_body_sight_reduction_problems(
+    num_bodies=3, 
+    time_window_hours=2.0,
+    navigation_mode='aviation',      # Aviation mode
+    aircraft_altitude=2500.0         # Flight altitude in meters
+)
+
+print(f"Generated {len(aviation_problems)} aviation sights for position fix:")
+for i, problem in enumerate(aviation_problems):
+    print(f"  {i+1}. {problem['celestial_body_name']} at {problem['observation_time'].iso}")
+    print(f"      Observed Altitude: {problem['observed_altitude']:.2f}°")
+    print(f"      Aircraft Altitude: {problem['aircraft_altitude']:.0f} m")
+```
+
+### Example: Aviation Sight Reduction with Movement Corrections
+
+```python
+from astropy.time import Time
+from astropy.coordinates import EarthLocation
+import astropy.units as u
+from src.sight_reduction import (
+    calculate_intercept, 
+    get_celestial_body,
+    calculate_movement_correction
+)
+
+# Set up initial conditions for aircraft navigation
+observed_altitude = 42.5      # degrees
+celestial_body_name = 'sun'
+observation_time = Time('2023-06-15T14:30:00')
+assumed_lat = 40.5          # degrees
+assumed_lon = -73.8         # degrees
+assumed_position = EarthLocation(lat=assumed_lat*u.deg, lon=assumed_lon*u.deg, height=0*u.m)
+
+# Aircraft parameters
+aircraft_altitude = 3000.0    # meters
+aircraft_speed = 250.0        # knots
+aircraft_course = 90.0        # degrees (East)
+
+# Perform the sight reduction with aviation parameters
+celestial_body = get_celestial_body(celestial_body_name, observation_time)
+intercept, azimuth = calculate_intercept(
+    observed_altitude,
+    celestial_body,
+    assumed_position,
+    observation_time,
+    navigation_mode='aviation',
+    observer_height=aircraft_altitude,
+    aircraft_speed_knots=aircraft_speed,
+    aircraft_course=aircraft_course,
+    time_interval_hours=0.0
+)
+
+print(f"Aviation Sight Reduction:")
+print(f"  Intercept: {abs(intercept):.2f} nm {'Toward' if intercept > 0 else 'Away'}")
+print(f"  Azimuth: {azimuth:.2f}°")
+
+# Calculate position after 30 minutes of flight
+new_position = calculate_movement_correction(
+    assumed_position,
+    observation_time,
+    aircraft_speed_knots=aircraft_speed,
+    aircraft_course=aircraft_course,
+    time_interval_hours=0.5  # 30 minutes
+)
+
+print(f"Position after 30 min: {new_position.lat.value:.4f}°N, {new_position.lon.value:.4f}°E")
+```

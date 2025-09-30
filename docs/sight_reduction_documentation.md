@@ -27,6 +27,10 @@ The project uses the [Astropy](https://www.astropy.org/) library to accurately c
 - Accurate celestial body positioning using Astropy
 - Comprehensive input validation and error handling
 - Utility functions for calculating total observation corrections
+- **Aeronautical Navigation Support for celestial navigation from aircraft**
+- **Bubble Sextant Corrections for artificial horizon observations**
+- **Aviation Table Integration with support for Pub. No. 249 style tables**
+- **Aircraft Movement Compensation for accurate position fixes during flight**
 
 ## Installation
 
@@ -48,7 +52,7 @@ The project requires the following Python packages:
 
 ### Main Functions
 
-#### `calculate_intercept(observed_altitude, celestial_body, assumed_position, observation_time, apply_refraction=True, temperature=10.0, pressure=1010.0, observer_height=0.0, celestial_body_name=None, limb='center')`
+#### `calculate_intercept(observed_altitude, celestial_body, assumed_position, observation_time, apply_refraction=True, temperature=10.0, pressure=1010.0, observer_height=0.0, celestial_body_name=None, limb='center', navigation_mode='marine', aircraft_speed_knots=0.0, aircraft_course=0.0, time_interval_hours=0.0)`
 
 Perform a sight reduction to calculate the intercept and azimuth with atmospheric corrections.
 
@@ -63,12 +67,16 @@ Perform a sight reduction to calculate the intercept and azimuth with atmospheri
 - `observer_height`: Height of observer above sea level in meters (default 0)
 - `celestial_body_name`: Name of celestial body ('sun', 'moon') for limb correction
 - `limb`: Which part of the celestial body to observe ('center', 'upper', 'lower')
+- `navigation_mode`: Navigation mode ('marine' or 'aviation') to determine correction methods
+- `aircraft_speed_knots`: Aircraft speed in knots (for aviation mode)
+- `aircraft_course`: Aircraft heading in degrees (for aviation mode)
+- `time_interval_hours`: Time interval from reference observation in hours (for aviation mode)
 
 **Returns:**
 - `intercept`: Distance between observed and calculated altitude (nautical miles)
 - `azimuth`: Calculated azimuth of the celestial body (degrees)
 
-#### `calculate_refraction_correction(observed_altitude, temperature=10.0, pressure=1010.0)`
+#### `calculate_refraction_correction(observed_altitude, temperature=10.0, pressure=1010.0, altitude_meters=0.0)`
 
 Calculate atmospheric refraction correction for celestial observations.
 
@@ -76,9 +84,87 @@ Calculate atmospheric refraction correction for celestial observations.
 - `observed_altitude`: The observed altitude of the celestial body in degrees
 - `temperature`: Atmospheric temperature in degrees Celsius
 - `pressure`: Atmospheric pressure in hPa
+- `altitude_meters`: Observer altitude above sea level in meters (for aviation corrections)
 
 **Returns:**
 - Refraction correction in degrees to be subtracted from observed altitude
+
+#### `calculate_dip_correction(observer_height)`
+
+Calculate the dip of the horizon correction for an elevated observer.
+
+**Parameters:**
+- `observer_height`: Height of observer above sea level in meters
+
+**Returns:**
+- Dip correction in degrees
+
+#### `calculate_limb_correction(celestial_body_name, limb='center')`
+
+Calculate limb correction for observations of the Sun and Moon.
+
+**Parameters:**
+- `celestial_body_name`: Name of the celestial body ('sun' or 'moon')
+- `limb`: Which part of the body to observe ('center', 'upper', or 'lower')
+
+**Returns:**
+- Limb correction in degrees
+
+#### `calculate_bubble_sextant_correction(aircraft_altitude=0.0, temperature=10.0, pressure=1013.25)`
+
+Calculate corrections specific to bubble sextant observations in aviation.
+
+**Parameters:**
+- `aircraft_altitude`: Aircraft altitude above sea level in meters
+- `temperature`: Atmospheric temperature at aircraft altitude in degrees Celsius
+- `pressure`: Atmospheric pressure at aircraft altitude in hPa
+
+**Returns:**
+- Correction in degrees for bubble sextant observations
+
+#### `calculate_movement_correction(assumed_position, observation_time, aircraft_speed_knots=0.0, aircraft_course=0.0, time_interval_hours=0.0)`
+
+Calculate position correction for observer movement during flight.
+
+**Parameters:**
+- `assumed_position`: Original assumed position
+- `observation_time`: Time of the original observation
+- `aircraft_speed_knots`: Aircraft speed in knots (nautical miles per hour)
+- `aircraft_course`: Aircraft course in degrees (0° = North, 90° = East, etc.)
+- `time_interval_hours`: Time interval from original observation in hours
+
+**Returns:**
+- Corrected EarthLocation accounting for movement
+
+#### `apply_time_interval_correction(observed_altitude, time_interval_hours, celestial_body, assumed_position, observation_time)`
+
+Apply time interval correction for changes in celestial body position.
+
+**Parameters:**
+- `observed_altitude`: Original observed altitude
+- `time_interval_hours`: Time interval from original observation in hours
+- `celestial_body`: Astropy SkyCoord of the celestial body
+- `assumed_position`: Assumed position for observation
+- `observation_time`: Original observation time
+
+**Returns:**
+- Corrected altitude accounting for body movement during time interval
+
+#### `get_total_observation_correction(observed_altitude, temperature=10.0, pressure=1010.0, observer_height=0.0, celestial_body_name=None, limb='center', navigation_mode='marine')`
+
+Calculate all corrections for a celestial observation.
+
+**Parameters:**
+- `observed_altitude`: Raw observed altitude in degrees
+- `temperature`: Atmospheric temperature in degrees Celsius
+- `pressure`: Atmospheric pressure in hPa
+- `observer_height`: Height of observer above sea level in meters
+- `celestial_body_name`: Name of celestial body for limb correction
+- `limb`: Which part of the body to observe ('center', 'upper', 'lower')
+- `navigation_mode`: Navigation mode ('marine' or 'aviation') to determine correction methods
+
+**Returns:**
+- Dictionary with all corrections and final altitude
 
 #### `calculate_dip_correction(observer_height)`
 
@@ -244,15 +330,18 @@ The sight reduction functionality now includes additional parameters for more re
 
 ## Almanac Integration
 
-The library now includes integration with nautical almanac data:
+The library now includes integration with both nautical and aviation almanac data:
 
-#### `get_celestial_body_almanac_data(body_name, date_time)`
+### Nautical Almanac
+
+#### `get_celestial_body_almanac_data(body_name, date_time, navigation_mode='marine')`
 
 Get almanac data for a specific celestial body at a specific date/time.
 
 **Parameters:**
 - `body_name`: Name of the celestial body
 - `date_time`: The date and time for which to get data
+- `navigation_mode`: Navigation mode ('marine' or 'aviation') to determine data source
 
 **Returns:**
 - Dictionary with almanac data for the celestial body
@@ -268,6 +357,34 @@ Get hourly almanac data for a celestial body for a full day.
 
 **Returns:**
 - Pandas DataFrame with hourly GHA and declination data
+
+### Aviation Almanac
+
+The aviation almanac module provides support for aviation-specific tables and celestial navigation from aircraft:
+
+#### `get_aviation_celestial_body_data(body_name, date_time)`
+
+Get aviation-specific almanac data for a celestial body.
+
+**Parameters:**
+- `body_name`: Name of the celestial body
+- `date_time`: The date and time for which to get data
+
+**Returns:**
+- Dictionary with aviation almanac data for the celestial body
+
+#### `get_aviation_table_lookup(assumed_lat, lha, declination, table_volume=1)`
+
+Look up altitude and azimuth from aviation tables (simulated Pub. No. 249 functionality).
+
+**Parameters:**
+- `assumed_lat`: Assumed latitude (0° to 90°, positive for North)
+- `lha`: Local Hour Angle (0° to 359°)
+- `declination`: Declination of the celestial body (-90° to +90°)
+- `table_volume`: Which volume of Pub. No. 249 (1, 2, or 3)
+
+**Returns:**
+- Dictionary with computed altitude, azimuth and corrections
 
 ## Advanced Position Fix Calculation
 
@@ -422,6 +539,79 @@ print(f"Limb correction: {corrections['limb_correction']:.4f}°")
 print(f"Corrected altitude: {corrections['corrected_altitude']:.2f}°")
 ```
 
+### Aviation Sight Reduction Example
+
+For navigation from aircraft using a bubble sextant:
+
+```python
+from astropy.time import Time
+from astropy.coordinates import EarthLocation
+import astropy.units as u
+from src.sight_reduction import calculate_intercept, get_celestial_body
+
+# Input data for aviation navigation
+observed_altitude = 45.23  # Observed altitude (degrees)
+celestial_body_name = "sun"
+assumed_lat = 40.7128      # Assumed latitude (degrees)
+assumed_lon = -74.0060     # Assumed longitude (degrees)
+observation_time = Time("2023-06-15T12:00:00")
+
+# Aircraft-specific parameters
+aircraft_altitude = 3000.0  # meters above sea level
+aircraft_speed = 200.0      # knots
+aircraft_course = 90.0      # degrees (heading East)
+time_interval = 0.5         # hours from reference observation
+
+# Define the celestial body
+celestial_body = get_celestial_body(celestial_body_name, observation_time)
+
+# Assumed position of the aircraft
+assumed_position = EarthLocation(lat=assumed_lat*u.deg, lon=assumed_lon*u.deg, height=0*u.m)
+
+# Perform sight reduction with aviation parameters
+intercept, azimuth = calculate_intercept(
+    observed_altitude,
+    celestial_body,
+    assumed_position,
+    observation_time,
+    navigation_mode='aviation',        # Aviation mode
+    observer_height=aircraft_altitude, # Aircraft altitude affects refraction
+    aircraft_speed_knots=aircraft_speed,  # For movement correction
+    aircraft_course=aircraft_course,      # For movement correction
+    time_interval_hours=time_interval     # Time from reference
+)
+
+print(f"Aviation intercept: {abs(intercept):.2f} nm {'Toward' if intercept > 0 else 'Away from'} celestial body")
+print(f"Aviation azimuth: {azimuth:.2f}°")
+```
+
+### Aircraft Movement Correction Example
+
+For tracking position changes during flight:
+
+```python
+from astropy.coordinates import EarthLocation
+import astropy.units as u
+from src.sight_reduction import calculate_movement_correction
+from astropy.time import Time
+
+# Original aircraft position
+original_position = EarthLocation(lat=40.0*u.deg, lon=-74.0*u.deg, height=0*u.m)
+observation_time = Time("2023-06-15T12:00:00")
+
+# After 2 hours of flight at 300 knots heading 045° (Northeast)
+corrected_position = calculate_movement_correction(
+    original_position,
+    observation_time,
+    aircraft_speed_knots=300.0,
+    aircraft_course=45.0,
+    time_interval_hours=2.0
+)
+
+print(f"Original position: {original_position.lat:.4f}, {original_position.lon:.4f}")
+print(f"Corrected position: {corrected_position.lat:.4f}, {corrected_position.lon:.4f}")
+```
+
 ## Atmospheric Corrections
 
 ### Atmospheric Refraction
@@ -431,6 +621,27 @@ The correction depends on:
 - Observed altitude of the celestial body
 - Atmospheric temperature
 - Atmospheric pressure
+- Observer altitude above sea level (especially important for aviation)
+
+### Aviation-Specific Corrections
+When performing celestial navigation from aircraft, additional corrections are required:
+
+#### Bubble Sextant Corrections
+In aviation, a bubble sextant provides an artificial horizon, eliminating the need for a visible horizon. The bubble sextant correction adjusts for:
+- Aircraft altitude above sea level
+- Atmospheric conditions at flight altitude
+- Bubble stability and alignment
+
+#### Aircraft Movement Corrections
+Positions change significantly during flight, requiring:
+- Position shift calculations based on aircraft speed and course
+- Time interval corrections for celestial body position changes
+- Adjustment of assumed position for accurate intercept calculations
+
+The aircraft movement correction accounts for the distance traveled during the observation period and adjusts the calculated position accordingly:
+- `distance_traveled = speed × time_interval`
+- Position shift based on course direction
+- Updated assumptions for sight reduction calculations
 
 ### Dip of Horizon
 When an observer is at an elevated position (like on a ship or on a hill), the horizon appears lower than it would from sea level. This correction accounts for the apparent lowering of the horizon based on the observer's height above sea level.

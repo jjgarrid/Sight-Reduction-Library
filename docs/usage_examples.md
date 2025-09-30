@@ -48,6 +48,203 @@ from astropy.time import Time
 from astropy.coordinates import EarthLocation
 import astropy.units as u
 from src.sight_reduction import calculate_intercept, get_celestial_body
+```
+
+## Aviation Examples
+
+### 1. Basic Aviation Sight Reduction with Bubble Sextant
+
+```python
+from astropy.time import Time
+from astropy.coordinates import EarthLocation
+import astropy.units as u
+from src.sight_reduction import calculate_intercept, get_celestial_body
+
+# Input data for an aviation sun sight using bubble sextant
+observed_altitude = 42.5      # Observed altitude from bubble sextant (degrees)
+celestial_body_name = "sun"
+assumed_lat = 40.5          # Assumed latitude (degrees)
+assumed_lon = -73.8         # Assumed longitude (degrees)
+observation_time = Time("2023-06-15T14:30:00")
+
+# Aircraft-specific parameters
+aircraft_altitude = 2500.0    # meters above sea level
+aircraft_speed = 250.0        # knots
+aircraft_course = 90.0        # degrees (East heading)
+
+# Define the celestial body
+celestial_body = get_celestial_body(celestial_body_name, observation_time)
+
+# Assumed position of the aircraft
+assumed_position = EarthLocation(lat=assumed_lat*u.deg, lon=assumed_lon*u.deg, height=0*u.m)
+
+# Perform aviation sight reduction
+intercept, azimuth = calculate_intercept(
+    observed_altitude, 
+    celestial_body, 
+    assumed_position, 
+    observation_time,
+    navigation_mode='aviation',       # Aviation mode uses artificial horizon
+    observer_height=aircraft_altitude, # For refraction calculations at altitude
+    aircraft_speed_knots=aircraft_speed,  # For movement correction
+    aircraft_course=aircraft_course       # For movement correction
+)
+
+print(f"Aircraft Position: {assumed_lat}°N, {abs(assumed_lon)}°W")
+print(f"Aircraft Altitude: {aircraft_altitude} meters")
+print(f"Observed Altitude: {observed_altitude:.2f}°")
+print(f"Intercept: {abs(intercept):.2f} nautical miles {'Toward' if intercept > 0 else 'Away from'} celestial body")
+print(f"Azimuth: {azimuth:.2f}°")
+```
+
+### 2. Multiple Aviation Sight Reductions with Movement Compensation
+
+```python
+from astropy.time import Time
+from astropy.coordinates import EarthLocation
+import astropy.units as u
+from src.sight_reduction import calculate_intercept, get_celestial_body, calculate_movement_correction
+
+# Initial parameters for first observation
+observed_altitude_1 = 42.5
+celestial_body_name_1 = "sun"
+assumed_lat = 40.5
+assumed_lon = -73.8
+observation_time_1 = Time("2023-06-15T14:30:00")
+
+# Aircraft parameters for movement correction
+aircraft_speed = 250.0      # knots
+aircraft_course = 90.0      # degrees (East heading)
+time_between_obs = 0.5      # hours (30 minutes)
+
+# Position for first observation
+assumed_position_1 = EarthLocation(lat=assumed_lat*u.deg, lon=assumed_lon*u.deg, height=0*u.m)
+
+# Perform first sight reduction
+celestial_body_1 = get_celestial_body(celestial_body_name_1, observation_time_1)
+intercept_1, azimuth_1 = calculate_intercept(
+    observed_altitude_1, 
+    celestial_body_1, 
+    assumed_position_1, 
+    observation_time_1,
+    navigation_mode='aviation',
+    observer_height=2500.0,  # Flight altitude
+    aircraft_speed_knots=aircraft_speed,
+    aircraft_course=aircraft_course
+)
+
+print(f"First Observation (Sun):")
+print(f"  Intercept: {abs(intercept_1):.2f} nm {'Toward' if intercept_1 > 0 else 'Away'}")
+print(f"  Azimuth: {azimuth_1:.2f}°")
+
+# Calculate new position for second observation (after 30 minutes of flight)
+observation_time_2 = observation_time_1 + Time(30*60, format='sec')  # Add 30 minutes
+assumed_position_2 = calculate_movement_correction(
+    assumed_position_1,
+    observation_time_1,
+    aircraft_speed_knots=aircraft_speed,
+    aircraft_course=aircraft_course,
+    time_interval_hours=time_between_obs
+)
+
+# Second observation
+observed_altitude_2 = 38.2
+celestial_body_name_2 = "vega"
+celestial_body_2 = get_celestial_body(celestial_body_name_2, observation_time_2)
+intercept_2, azimuth_2 = calculate_intercept(
+    observed_altitude_2, 
+    celestial_body_2, 
+    assumed_position_2, 
+    observation_time_2,
+    navigation_mode='aviation',
+    observer_height=2500.0,  # Flight altitude
+    aircraft_speed_knots=aircraft_speed,
+    aircraft_course=aircraft_course
+)
+
+print(f"Second Observation (Vega after movement):")
+print(f"  New Position: {assumed_position_2.lat.value:.4f}°N, {assumed_position_2.lon.value:.4f}°W")
+print(f"  Intercept: {abs(intercept_2):.2f} nm {'Toward' if intercept_2 > 0 else 'Away'}")
+print(f"  Azimuth: {azimuth_2:.2f}°")
+```
+
+### 3. Using Aviation Tables (Simulated Pub. No. 249 lookup)
+
+```python
+from src.aviation_almanac import get_aviation_table_lookup
+
+# Parameters for aviation table lookup
+assumed_lat = 40.0      # Assumed latitude (degrees North)
+lha = 45.0              # Local Hour Angle (degrees)
+declination = 20.0      # Declination of celestial body (degrees North)
+table_volume = 1        # Which volume of Pub. No. 249 to use
+
+# Look up altitude and azimuth from aviation tables
+lookup_result = get_aviation_table_lookup(
+    assumed_lat=assumed_lat,
+    lha=lha,
+    declination=declination,
+    table_volume=table_volume
+)
+
+computed_altitude = lookup_result['computed_altitude']
+azimuth = lookup_result['azimuth']
+delta_correction = lookup_result['delta_correction']
+
+print(f"Aviation Table Lookup Results (Volume {table_volume}):")
+print(f"  Computed Altitude: {computed_altitude:.2f}°")
+print(f"  Azimuth: {azimuth:.1f}°")
+print(f"  Delta Correction: {delta_correction:.4f}")
+```
+
+### 4. Comprehensive Aviation Problem Generation
+
+```python
+from src.problem_generator import generate_sight_reduction_problem
+from src.sight_reduction import calculate_intercept, get_celestial_body
+
+# Generate an aviation-specific sight reduction problem
+aviation_problem = generate_sight_reduction_problem(
+    celestial_body_name='sun',
+    navigation_mode='aviation',  # Set to aviation mode
+    aircraft_altitude=3000.0     # Flight altitude in meters
+)
+
+# Display the problem
+print(f"Aeronautical Sight Reduction Problem")
+print(f"Celestial Body: {aviation_problem['celestial_body_name'].capitalize()}")
+print(f"Observation Time (UTC): {aviation_problem['observation_time'].iso}")
+print(f"Observed Sextant Altitude: {aviation_problem['observed_altitude']:.1f}°")
+print(f"Aircraft Altitude: {aviation_problem['aircraft_altitude']:.1f} meters")
+print(f"Assumed Position: {aviation_problem['assumed_position'].lat.deg:+.4f}°, {aviation_problem['assumed_position'].lon.deg:+.4f}°")
+print(f"Environmental Conditions:")
+print(f"  Temperature: {aviation_problem['temperature']:.1f}°C")
+print(f"  Pressure: {aviation_problem['pressure']:.1f} hPa")
+
+# Solve the problem
+celestial_body = get_celestial_body(
+    aviation_problem['celestial_body_name'], 
+    aviation_problem['observation_time']
+)
+
+intercept, azimuth = calculate_intercept(
+    aviation_problem['observed_altitude'],
+    celestial_body,
+    aviation_problem['assumed_position'],
+    aviation_problem['observation_time'],
+    navigation_mode=aviation_problem['navigation_mode'],
+    observer_height=aviation_problem['aircraft_altitude'],
+    temperature=aviation_problem['temperature'],
+    pressure=aviation_problem['pressure'],
+    celestial_body_name=aviation_problem['celestial_body_name'],
+    limb=aviation_problem['limb']
+)
+
+print(f"\nSolution:")
+print(f"  Intercept: {abs(intercept):.2f} nautical miles {'Toward' if intercept > 0 else 'Away from'} celestial body")
+print(f"  Azimuth: {azimuth:.2f}°")
+print(f"  Actual Position: {aviation_problem['actual_position'].lat.deg:+.4f}°, {aviation_problem['actual_position'].lon.deg:+.4f}°")
+```
 
 # Input data for a moon sight
 observed_altitude = 38.45  # Observed altitude (degrees)

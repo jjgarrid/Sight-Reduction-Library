@@ -59,7 +59,8 @@ def validate_limb(limb: str) -> None:
 
 def calculate_refraction_correction(observed_altitude: float, 
                                   temperature: float = 10.0, 
-                                  pressure: float = 1010.0) -> float:
+                                  pressure: float = 1010.0,
+                                  altitude_meters: float = 0.0) -> float:
     """
     Calculate atmospheric refraction correction for celestial observations.
     
@@ -67,6 +68,7 @@ def calculate_refraction_correction(observed_altitude: float,
     - observed_altitude: The observed altitude of the celestial body in degrees
     - temperature: Atmospheric temperature in degrees Celsius (default: 10°C)
     - pressure: Atmospheric pressure in hPa (default: 1010 hPa)
+    - altitude_meters: Observer altitude above sea level in meters
     
     Returns:
     - Refraction correction in degrees to be subtracted from observed altitude
@@ -75,6 +77,21 @@ def calculate_refraction_correction(observed_altitude: float,
     validate_altitude(observed_altitude)
     validate_temperature(temperature)
     validate_pressure(pressure)
+    validate_observer_height(altitude_meters)
+    
+    # Adjust pressure and temperature based on altitude if above sea level
+    if altitude_meters > 0:
+        # Standard atmospheric lapse rate: temperature decreases by 6.5°C per 1000m
+        temp_at_altitude = temperature - (6.5 * altitude_meters / 1000.0)
+        
+        # Barometric formula for pressure at altitude
+        # P = P0 * exp(-g * M * h / (R * T))
+        # Where g = gravitational acceleration, M = molar mass of air, 
+        # h = altitude, R = gas constant, T = temperature in Kelvin
+        pressure_at_altitude = pressure * math.exp(-0.00012 * altitude_meters)
+    else:
+        temp_at_altitude = temperature
+        pressure_at_altitude = pressure
     
     # Convert observed altitude to radians for calculation
     alt_deg = observed_altitude
@@ -95,8 +112,8 @@ def calculate_refraction_correction(observed_altitude: float,
         h = alt_min + 7.32 / (alt_min + 4.32)
         refraction_min = 0.96 / math.tan(math.radians(h / 60.0))
         
-        # Apply temperature and pressure corrections
-        refraction_min *= (pressure / 1010.0) * (273.0 / (273.0 + temperature))
+        # Apply temperature and pressure corrections at altitude
+        refraction_min *= (pressure_at_altitude / 1010.0) * (273.0 / (273.0 + temp_at_altitude))
         
         # Convert from minutes of arc to degrees
         refraction_deg = refraction_min / 60.0
@@ -107,7 +124,7 @@ def calculate_refraction_correction(observed_altitude: float,
             refraction_deg = 34.0 / 60.0  # Standard refraction at horizon in degrees
         else:
             refraction_min = 1.02 / math.tan(alt_rad)  # In minutes of arc
-            refraction_deg = (refraction_min / 60.0) * (pressure / 1010.0) * (273.0 / (273.0 + temperature))
+            refraction_deg = (refraction_min / 60.0) * (pressure_at_altitude / 1010.0) * (273.0 / (273.0 + temp_at_altitude))
     
     # Refraction makes objects appear higher than they actually are
     # The correction value is positive (as refraction always makes things appear higher)
@@ -117,7 +134,8 @@ def calculate_refraction_correction(observed_altitude: float,
 
 def apply_refraction_correction(observed_altitude: float, 
                               temperature: float = 10.0, 
-                              pressure: float = 1010.0) -> float:
+                              pressure: float = 1010.0,
+                              altitude_meters: float = 0.0) -> float:
     """
     Apply atmospheric refraction correction to convert observed altitude to true altitude.
     
@@ -125,11 +143,12 @@ def apply_refraction_correction(observed_altitude: float,
     - observed_altitude: The raw altitude measured with the sextant in degrees
     - temperature: Atmospheric temperature in degrees Celsius
     - pressure: Atmospheric pressure in hPa
+    - altitude_meters: Observer altitude above sea level in meters
     
     Returns:
     - True altitude in degrees (after refraction correction)
     """
-    correction = calculate_refraction_correction(observed_altitude, temperature, pressure)
+    correction = calculate_refraction_correction(observed_altitude, temperature, pressure, altitude_meters)
     # Since refraction makes objects appear higher, subtract the correction to get true altitude
     return observed_altitude - correction
 
@@ -161,6 +180,132 @@ def calculate_dip_correction(observer_height: float) -> float:
     
     # Dip is negative because the horizon appears lower
     return dip_degrees  # Return positive value; in the main function, we add it to the altitude
+
+
+def calculate_bubble_sextant_correction(aircraft_altitude: float = 0.0, 
+                                       temperature: float = 10.0, 
+                                       pressure: float = 1013.25) -> float:
+    """
+    Calculate corrections specific to bubble sextant observations in aviation.
+    
+    In aviation, a bubble sextant provides an artificial horizon, eliminating
+    the need for a visible horizon. This function calculates adjustments based
+    on aircraft altitude and atmospheric conditions at altitude.
+    
+    Parameters:
+    - aircraft_altitude: Aircraft altitude above sea level in meters
+    - temperature: Atmospheric temperature at aircraft altitude in degrees Celsius
+    - pressure: Atmospheric pressure at aircraft altitude in hPa
+    
+    Returns:
+    - Correction in degrees for bubble sextant observations
+    """
+    # For now, return 0 as basic implementation
+    # In the future, this function can be expanded with more sophisticated corrections
+    # for temperature, pressure, and altitude effects at high altitudes
+    return 0.0
+
+
+def calculate_movement_correction(assumed_position, observation_time, 
+                                aircraft_speed_knots: float = 0.0,
+                                aircraft_course: float = 0.0,
+                                time_interval_hours: float = 0.0) -> EarthLocation:
+    """
+    Calculate position correction for observer movement during flight.
+    
+    In aviation navigation, aircraft move rapidly and positions change significantly
+    during the observation period. This function calculates the position shift
+    due to aircraft movement.
+    
+    Parameters:
+    - assumed_position: Original assumed position
+    - observation_time: Time of the original observation
+    - aircraft_speed_knots: Aircraft speed in knots (nautical miles per hour)
+    - aircraft_course: Aircraft course in degrees (0° = North, 90° = East, etc.)
+    - time_interval_hours: Time interval from original observation in hours (positive = after, negative = before)
+    
+    Returns:
+    - Corrected EarthLocation account for movement
+    """
+    if aircraft_speed_knots == 0.0 or time_interval_hours == 0.0:
+        return assumed_position
+    
+    # Calculate distance traveled in nautical miles
+    distance_nm = aircraft_speed_knots * abs(time_interval_hours)
+    
+    # Convert distance to kilometers (1 nautical mile = 1.852 km)
+    distance_km = distance_nm * 1.852
+    
+    # Calculate position shift based on course
+    # Convert course to radians
+    course_rad = math.radians(aircraft_course)
+    
+    # Calculate lat/lon shift
+    # This is a simplified calculation that works well for short distances
+    lat_shift = (distance_km / 111.0) * math.cos(course_rad)  # ~111 km per degree latitude
+    lon_shift = (distance_km / (111.0 * math.cos(math.radians(assumed_position.lat.deg)))) * math.sin(course_rad)
+    
+    # Apply shift based on time direction (positive time_interval = after observation)
+    if time_interval_hours > 0:
+        new_lat = assumed_position.lat.deg + lat_shift
+        new_lon = assumed_position.lon.deg + lon_shift
+    else:  # time_interval_hours < 0
+        new_lat = assumed_position.lat.deg - lat_shift
+        new_lon = assumed_position.lon.deg - lon_shift
+    
+    # Ensure longitude stays within [-180, 180]
+    # This can be improved with proper modular arithmetic
+    while new_lon > 180:
+        new_lon -= 360
+    while new_lon < -180:
+        new_lon += 360
+    
+    # Create new EarthLocation with corrected coordinates
+    corrected_location = EarthLocation(lat=new_lat*u.deg, lon=new_lon*u.deg, height=assumed_position.height)
+    return corrected_location
+
+
+def apply_time_interval_correction(observed_altitude: float, 
+                                  time_interval_hours: float, 
+                                  celestial_body, 
+                                  assumed_position, 
+                                  observation_time) -> float:
+    """
+    Apply time interval correction for changes in celestial body position.
+    
+    When multiple observations are made over a time interval, the celestial
+    bodies' positions change due to Earth's rotation and orbital motion.
+    This function calculates the change in altitude during the time interval.
+    
+    Parameters:
+    - observed_altitude: Original observed altitude
+    - time_interval_hours: Time interval from original observation in hours
+    - celestial_body: Astropy SkyCoord of the celestial body
+    - assumed_position: Assumed position for observation
+    - observation_time: Original observation time
+    
+    Returns:
+    - Corrected altitude accounting for body movement during time interval
+    """
+    if time_interval_hours == 0:
+        return observed_altitude
+    
+    # Calculate the new time
+    import astropy.time
+    new_time = observation_time + astropy.time.TimeDelta(time_interval_hours * 3600, format='sec')  # Convert hours to seconds
+    
+    # Transform the celestial body to the new time at the assumed position
+    altaz_frame = AltAz(location=assumed_position, obstime=new_time)
+    body_altaz = celestial_body.transform_to(altaz_frame)
+    
+    # Calculate the new altitude
+    new_altitude = body_altaz.alt.deg
+    
+    # Calculate the change in altitude
+    altitude_change = new_altitude - observed_altitude
+    
+    # Return the corrected altitude
+    return observed_altitude + altitude_change
 
 
 def calculate_limb_correction(celestial_body_name: str, limb: str = "center") -> float:
@@ -228,7 +373,9 @@ def calculate_limb_correction(celestial_body_name: str, limb: str = "center") ->
 
 def calculate_intercept(observed_altitude, celestial_body, assumed_position, observation_time,
                        apply_refraction=True, temperature=10.0, pressure=1010.0, 
-                       observer_height=0.0, celestial_body_name=None, limb='center'):
+                       observer_height=0.0, celestial_body_name=None, limb='center',
+                       navigation_mode='marine', aircraft_speed_knots=0.0, 
+                       aircraft_course=0.0, time_interval_hours=0.0):
     """
     Perform a sight reduction to calculate the intercept (distance and direction) and azimuth
     with atmospheric corrections.
@@ -244,6 +391,10 @@ def calculate_intercept(observed_altitude, celestial_body, assumed_position, obs
     - observer_height: Height of observer above sea level in meters (default 0).
     - celestial_body_name: Name of the celestial body ('sun', 'moon', etc.) for limb correction.
     - limb: Which part of the celestial body to observe ('center', 'upper', 'lower').
+    - navigation_mode: Navigation mode ('marine' or 'aviation') to determine correction methods.
+    - aircraft_speed_knots: Aircraft speed in knots (for aviation mode)
+    - aircraft_course: Aircraft heading in degrees (for aviation mode)
+    - time_interval_hours: Time interval from reference observation in hours (for aviation mode)
 
     Returns:
     - intercept: Distance between observed and calculated altitude (nautical miles).
@@ -258,26 +409,57 @@ def calculate_intercept(observed_altitude, celestial_body, assumed_position, obs
         validate_celestial_body_name(celestial_body_name)
         validate_limb(limb)
     
+    # Validate navigation mode
+    if navigation_mode not in ['marine', 'aviation']:
+        raise ValueError(f"Navigation mode '{navigation_mode}' is not supported. Use 'marine' or 'aviation'")
+    
     # Apply atmospheric corrections to the observed altitude
     corrected_altitude = observed_altitude
     
     # Apply refraction correction
     if apply_refraction:
-        refraction_corr = calculate_refraction_correction(observed_altitude, temperature, pressure)
+        refraction_corr = calculate_refraction_correction(observed_altitude, temperature, pressure, observer_height)
         corrected_altitude -= refraction_corr  # Subtract because refraction makes objects appear higher
     
     # Apply dip of horizon correction if observer is elevated
-    if observer_height > 0:
+    # In aviation mode, we use an artificial horizon (bubble sextant), so no dip correction is needed
+    if navigation_mode == 'marine' and observer_height > 0:
         dip_corr = calculate_dip_correction(observer_height)
         corrected_altitude += dip_corr  # Add dip correction (dip makes horizon appear lower)
+    elif navigation_mode == 'aviation':
+        # In aviation, we use a bubble sextant which provides an artificial horizon
+        # So we don't need dip correction, but we may need adjustments for altitude
+        pass
     
     # Apply limb correction if needed
     if celestial_body_name is not None:
         limb_corr = calculate_limb_correction(celestial_body_name, limb)
         corrected_altitude += limb_corr
     
-    # Create an AltAz frame for the assumed position
-    altaz_frame = AltAz(location=assumed_position, obstime=observation_time)
+    # For aviation mode, apply time interval correction for celestial body movement
+    if navigation_mode == 'aviation' and time_interval_hours != 0.0:
+        corrected_altitude = apply_time_interval_correction(
+            corrected_altitude,
+            time_interval_hours,
+            celestial_body,
+            assumed_position,
+            observation_time
+        )
+    
+    # For aviation mode, adjust the assumed position for aircraft movement
+    if navigation_mode == 'aviation' and (aircraft_speed_knots != 0.0 or time_interval_hours != 0.0):
+        corrected_assumed_position = calculate_movement_correction(
+            assumed_position, 
+            observation_time,
+            aircraft_speed_knots,
+            aircraft_course,
+            time_interval_hours
+        )
+    else:
+        corrected_assumed_position = assumed_position
+
+    # Create an AltAz frame for the (potentially corrected) assumed position
+    altaz_frame = AltAz(location=corrected_assumed_position, obstime=observation_time)
 
     # Transform the celestial body's coordinates to AltAz
     body_altaz = celestial_body.transform_to(altaz_frame)
@@ -297,7 +479,8 @@ def get_total_observation_correction(observed_altitude: float,
                                    pressure: float = 1010.0,
                                    observer_height: float = 0.0,
                                    celestial_body_name: str = None,
-                                   limb: str = 'center') -> dict:
+                                   limb: str = 'center',
+                                   navigation_mode: str = 'marine') -> dict:
     """
     Calculate all corrections for a celestial observation.
     
@@ -308,6 +491,7 @@ def get_total_observation_correction(observed_altitude: float,
     - observer_height: Height of observer above sea level in meters
     - celestial_body_name: Name of celestial body for limb correction
     - limb: Which part of the body to observe ('center', 'upper', 'lower')
+    - navigation_mode: Navigation mode ('marine' or 'aviation') to determine correction methods
     
     Returns:
     - Dictionary with all corrections and final altitude
@@ -321,23 +505,33 @@ def get_total_observation_correction(observed_altitude: float,
         validate_celestial_body_name(celestial_body_name)
         validate_limb(limb)
     
+    # Validate navigation mode
+    if navigation_mode not in ['marine', 'aviation']:
+        raise ValueError(f"Navigation mode '{navigation_mode}' is not supported. Use 'marine' or 'aviation'")
+    
     corrections = {
         'observed_altitude': observed_altitude,
         'refraction_correction': 0.0,
         'dip_correction': 0.0,
         'limb_correction': 0.0,
         'total_correction': 0.0,
-        'corrected_altitude': observed_altitude
+        'corrected_altitude': observed_altitude,
+        'navigation_mode': navigation_mode
     }
     
     # Calculate refraction correction
-    refraction_corr = calculate_refraction_correction(observed_altitude, temperature, pressure)
+    refraction_corr = calculate_refraction_correction(observed_altitude, temperature, pressure, observer_height)
     corrections['refraction_correction'] = refraction_corr
     
     # Calculate dip correction if observer is elevated
-    if observer_height > 0:
+    # In aviation mode, we use an artificial horizon (bubble sextant), so no dip correction is needed
+    if navigation_mode == 'marine' and observer_height > 0:
         dip_corr = calculate_dip_correction(observer_height)
         corrections['dip_correction'] = dip_corr
+    elif navigation_mode == 'aviation':
+        # In aviation, we use a bubble sextant which provides an artificial horizon
+        # So we don't need dip correction
+        corrections['dip_correction'] = 0.0
     
     # Calculate limb correction if needed
     if celestial_body_name is not None:
@@ -448,7 +642,7 @@ def format_position(lat, lon):
 def visualize_sight_reduction(observed_altitude, celestial_body_name, assumed_lat, assumed_lon, 
                               observation_time, apply_refraction=True, temperature=10.0, 
                               pressure=1010.0, observer_height=0.0, limb='center', 
-                              plot_type='both', save_path=None):
+                              navigation_mode='marine', plot_type='both', save_path=None):
     """
     Visualize the sight reduction results with plots.
     
@@ -463,6 +657,7 @@ def visualize_sight_reduction(observed_altitude, celestial_body_name, assumed_la
     - pressure: Atmospheric pressure in hPa
     - observer_height: Height of observer above sea level in meters
     - limb: Which part of the celestial body to observe ('center', 'upper', 'lower')
+    - navigation_mode: Navigation mode ('marine' or 'aviation') to determine correction methods
     - plot_type: Type of plot to create ('azimuth', 'line_of_position', 'both')
     - save_path: Path to save the plot (optional)
     
@@ -490,7 +685,11 @@ def visualize_sight_reduction(observed_altitude, celestial_body_name, assumed_la
             pressure=pressure,
             observer_height=observer_height,
             celestial_body_name=celestial_body_name,
-            limb=limb
+            limb=limb,
+            navigation_mode=navigation_mode,
+            aircraft_speed_knots=0.0,  # Default: no movement
+            aircraft_course=0.0,      # Default: no course
+            time_interval_hours=0.0   # Default: no time interval
         )
         
         figs = []

@@ -286,30 +286,37 @@ class AlmanacInterface:
 
 
 # Functions that integrate with the problem generation
-def get_celestial_body_almanac_data(body_name: str, date_time: datetime) -> Dict[str, float]:
+def get_celestial_body_almanac_data(body_name: str, date_time: datetime, navigation_mode: str = 'marine') -> Dict[str, float]:
     """
     Get almanac data for a specific celestial body at a specific date/time.
     
     Parameters:
     - body_name: Name of the celestial body
     - date_time: The date and time for which to get data
+    - navigation_mode: Navigation mode ('marine' or 'aviation') to determine data source
     
     Returns:
     - Dictionary with almanac data for the celestial body
     """
-    almanac = AlmanacInterface()
-    
-    body_name_lower = body_name.lower()
-    
-    if body_name_lower == 'sun':
-        return almanac.get_sun_data(date_time)
-    elif body_name_lower == 'moon':
-        return almanac.get_moon_data(date_time)
-    elif body_name_lower in ['mercury', 'venus', 'mars', 'jupiter', 'saturn']:
-        return almanac.get_planet_data(body_name_lower, date_time)
+    if navigation_mode == 'aviation':
+        # Use aviation-specific almanac
+        from .aviation_almanac import get_aviation_celestial_body_data
+        return get_aviation_celestial_body_data(body_name, date_time)
     else:
-        # Assume it's a star
-        return almanac.get_star_data(body_name_lower, date_time)
+        # Use traditional marine almanac
+        almanac = AlmanacInterface()
+        
+        body_name_lower = body_name.lower()
+        
+        if body_name_lower == 'sun':
+            return almanac.get_sun_data(date_time)
+        elif body_name_lower == 'moon':
+            return almanac.get_moon_data(date_time)
+        elif body_name_lower in ['mercury', 'venus', 'mars', 'jupiter', 'saturn']:
+            return almanac.get_planet_data(body_name_lower, date_time)
+        else:
+            # Assume it's a star
+            return almanac.get_star_data(body_name_lower, date_time)
 
 
 def get_hourly_almanac_data(body_name: str, date: datetime, hours: int = 24) -> pd.DataFrame:

@@ -5,6 +5,7 @@ The Sight Reduction package provides tools for performing celestial navigation s
 
 ## Table of Contents
 - [Complete Project Documentation](sight_reduction_documentation.md) - Comprehensive guide covering all aspects of the project
+- [Aeronautical Navigation Guide](aviation_navigation_guide.md) - Complete guide to celestial navigation from aircraft
 - [Installation Guide](installation_guide.md) - Step-by-step installation and setup instructions
 - [API Reference](api_reference.md) - Detailed documentation of all functions and their parameters
 - [Usage Examples](usage_examples.md) - Practical examples for different celestial bodies and scenarios

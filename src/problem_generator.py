@@ -205,7 +205,9 @@ def generate_sight_reduction_problem(
     celestial_body_name: Optional[str] = None,
     add_random_error: bool = True,
     error_range: float = 0.1,
-    max_retries: int = 10
+    max_retries: int = 10,
+    navigation_mode: str = 'marine',
+    aircraft_altitude: float = 0.0
 ) -> Dict:
     """
     Generate a realistic sight reduction problem with all necessary parameters.
@@ -217,16 +219,29 @@ def generate_sight_reduction_problem(
     - add_random_error: Whether to add random error to make the problem more realistic
     - error_range: Range of random error to add (in degrees)
     - max_retries: Maximum number of retries when celestial body is not visible
+    - navigation_mode: Navigation mode ('marine' or 'aviation') to determine correction methods
+    - aircraft_altitude: Aircraft altitude above sea level in meters (for aviation mode)
     
     Returns:
     - Dictionary containing all parameters needed for a sight reduction problem
     """
+    # Validate navigation mode
+    if navigation_mode not in ['marine', 'aviation']:
+        raise ValueError(f"Navigation mode '{navigation_mode}' is not supported. Use 'marine' or 'aviation'")
+    
     retry_count = 0
     while retry_count < max_retries:
         try:
             # If no position is provided, generate a realistic one
             if actual_position is None:
-                lat, lon = generate_realistic_position()
+                if navigation_mode == 'aviation':
+                    # For aviation, we can be anywhere, not just in navigable waters
+                    lat = np.random.uniform(-90.0, 90.0)  # Any latitude possible in aviation
+                    lon = np.random.uniform(-180.0, 180.0)  # Any longitude
+                else:
+                    # For marine navigation, generate position in navigable waters
+                    lat, lon = generate_realistic_position()
+                
                 actual_position = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=0*u.m)
             
             # If no observation time is provided, generate a realistic one
@@ -241,7 +256,21 @@ def generate_sight_reduction_problem(
             
             # Generate realistic parameters
             atmospheric = get_realistic_atmospheric_conditions()
-            observer_params = get_realistic_observer_parameters()
+            
+            # Generate observer parameters based on navigation mode
+            if navigation_mode == 'aviation':
+                # For aviation, set appropriate parameters
+                observer_height = 0.0  # No dip correction needed with bubble sextant
+                wave_height = 0.0      # No waves in flight
+                # Adjust atmospheric conditions for flight altitude
+                # For now, we'll keep standard values, but could add altitude-based adjustments
+            else:
+                # For marine navigation
+                observer_params = get_realistic_observer_parameters()
+                observer_height = observer_params['observer_height']
+                wave_height = observer_params['wave_height']
+            
+            # Generate instrument parameters
             instrument_params = get_realistic_instrument_parameters()
             
             # Randomly choose limb for Sun and Moon
@@ -289,11 +318,18 @@ def generate_sight_reduction_problem(
             refraction_correction = calculate_refraction_correction(
                 true_altitude,
                 atmospheric['temperature'],
-                atmospheric['pressure']
+                atmospheric['pressure'],
+                observer_height
             )
             
-            # Calculate dip correction (what would be applied to observed altitude)
-            dip_correction = calculate_dip_correction(observer_params['observer_height'])
+            # Calculate dip correction based on navigation mode
+            if navigation_mode == 'aviation':
+                # In aviation mode, we use a bubble sextant which provides an artificial horizon
+                # So we don't need dip correction, but we may need bubble sextant corrections
+                dip_correction = 0.0
+            else:
+                # Calculate dip correction (what would be applied to observed altitude)
+                dip_correction = calculate_dip_correction(observer_height)
             
             # Calculate limb correction (what would be applied to observed altitude)
             limb_correction = calculate_limb_correction(celestial_body_name, limb)
@@ -302,7 +338,7 @@ def generate_sight_reduction_problem(
             # Add all corrections and errors to the true altitude to get the observed altitude
             observed_altitude = true_altitude
             observed_altitude += refraction_correction  # Refraction makes body appear higher
-            observed_altitude -= dip_correction         # Dip makes horizon appear lower
+            observed_altitude -= dip_correction         # Dip makes horizon appear lower (or 0 for aviation)
             observed_altitude -= limb_correction        # Limb correction adjustment
             observed_altitude -= total_systematic_error  # Errors in measurement
             
@@ -330,8 +366,8 @@ def generate_sight_reduction_problem(
                 'temperature': atmospheric['temperature'],
                 'pressure': atmospheric['pressure'],
                 'humidity': atmospheric['humidity'],
-                'observer_height': observer_params['observer_height'],
-                'wave_height': observer_params['wave_height'],
+                'observer_height': observer_height,  # Use the value based on navigation mode
+                'wave_height': wave_height,         # Use the value based on navigation mode
                 'instrument_error': instrument_params['instrument_error'],
                 'index_error': instrument_params['index_error'],
                 'personal_error': instrument_params['personal_error'],
@@ -342,7 +378,9 @@ def generate_sight_reduction_problem(
                 'refraction_correction': refraction_correction,
                 'dip_correction': dip_correction,
                 'limb_correction': limb_correction,
-                'total_systematic_error': total_systematic_error
+                'total_systematic_error': total_systematic_error,
+                'navigation_mode': navigation_mode,
+                'aircraft_altitude': aircraft_altitude if navigation_mode == 'aviation' else 0.0
             }
             
             return problem_params
@@ -370,9 +408,42 @@ def format_problem_for_user(problem_params: Dict) -> str:
     """
     obs_time = problem_params['observation_time'].iso
     body_name = problem_params['celestial_body_name'].capitalize()
+    navigation_mode = problem_params.get('navigation_mode', 'marine')
     limb_text = f" ({problem_params['limb']} limb)" if problem_params['celestial_body_name'] in ['sun', 'moon'] else ""
     
-    problem_text = f"""
+    # Customize the problem text based on navigation mode
+    if navigation_mode == 'aviation':
+        problem_text = f"""
+AERONAUTICAL SIGHT REDUCTION PROBLEM
+
+Celestial Body: {body_name}{limb_text}
+Observation Time (UTC): {obs_time}
+
+Observed Sextant Altitude: {problem_params['observed_altitude']:.1f}°
+(Using bubble sextant with artificial horizon)
+
+Environmental Conditions:
+- Temperature: {problem_params['temperature']:.1f}°C
+- Atmospheric Pressure: {problem_params['pressure']:.1f} hPa
+- Aircraft Altitude: {problem_params['aircraft_altitude']:.1f} meters
+
+Assumed Position:
+- Latitude: {problem_params['assumed_position'].lat.deg:+.4f}°
+- Longitude: {problem_params['assumed_position'].lon.deg:+.4f}°
+
+Instrument Parameters:
+- Instrument Error: {problem_params['instrument_error']:.3f}°
+- Index Error: {problem_params['index_error']:.3f}°
+- Personal Error: {problem_params['personal_error']:.3f}°
+
+Task: 
+Calculate the intercept and azimuth for this aviation observation using sight reduction methods.
+The actual aircraft position is at: 
+- Latitude: {problem_params['actual_position'].lat.deg:+.4f}°
+- Longitude: {problem_params['actual_position'].lon.deg:+.4f}°
+"""
+    else:  # marine navigation
+        problem_text = f"""
 SIGHT REDUCTION PROBLEM
 
 Celestial Body: {body_name}{limb_text}
@@ -405,7 +476,8 @@ The actual vessel position is at:
 
 def validate_problem_solution(observed_altitude: float, celestial_body_name: str, assumed_position: EarthLocation, 
                              observation_time: Time, intercept: float, azimuth: float, temperature: float = 10.0, 
-                             pressure: float = 1010.0, observer_height: float = 0.0, limb: str = 'center') -> Dict[str, float]:
+                             pressure: float = 1010.0, observer_height: float = 0.0, limb: str = 'center',
+                             navigation_mode: str = 'marine') -> Dict[str, float]:
     """
     Validate a solution to a sight reduction problem by comparing with the known actual position.
     
@@ -420,6 +492,7 @@ def validate_problem_solution(observed_altitude: float, celestial_body_name: str
     - pressure: Atmospheric pressure (default 1010 hPa)
     - observer_height: Height above sea level (default 0m)
     - limb: Which limb was observed ('upper', 'lower', 'center') - for Sun and Moon
+    - navigation_mode: Navigation mode ('marine' or 'aviation') to determine correction methods
     
     Returns:
     - Dictionary with validation results
@@ -438,7 +511,11 @@ def validate_problem_solution(observed_altitude: float, celestial_body_name: str
         pressure=pressure,
         observer_height=observer_height,
         celestial_body_name=celestial_body_name,
-        limb=limb
+        limb=limb,
+        navigation_mode=navigation_mode,
+        aircraft_speed_knots=0.0,  # Default: no movement
+        aircraft_course=0.0,      # Default: no course
+        time_interval_hours=0.0   # Default: no time interval
     )
     
     # Return validation metrics
@@ -724,13 +801,17 @@ def generate_moon_sight_problem() -> Dict:
 
 
 def generate_multi_body_sight_reduction_problems(num_bodies: int = 3, 
-                                                 time_window_hours: float = 2.0) -> list:
+                                                 time_window_hours: float = 2.0,
+                                                 navigation_mode: str = 'marine',
+                                                 aircraft_altitude: float = 0.0) -> list:
     """
     Generate multiple sight reduction problems for a position fix.
     
     Parameters:
     - num_bodies: Number of celestial bodies to observe (default 3)
     - time_window_hours: Time window in which all observations are made (default 2 hours)
+    - navigation_mode: Navigation mode ('marine' or 'aviation') to determine correction methods
+    - aircraft_altitude: Aircraft altitude in meters (for aviation mode)
     
     Returns:
     - List of dictionaries, each containing parameters for a sight reduction problem
@@ -767,7 +848,9 @@ def generate_multi_body_sight_reduction_problems(num_bodies: int = 3,
                     celestial_body_name=celestial_body,
                     add_random_error=True,
                     error_range=0.15,  # Standard error for realistic problems
-                    max_retries=8      # High retry count but not too high
+                    max_retries=8,     # High retry count but not too high
+                    navigation_mode=navigation_mode,
+                    aircraft_altitude=aircraft_altitude
                 )
                 
                 problems.append(problem)
@@ -788,7 +871,9 @@ def generate_multi_body_sight_reduction_problems(num_bodies: int = 3,
                         celestial_body_name=fallback_body,
                         add_random_error=True,
                         error_range=0.15,
-                        max_retries=10
+                        max_retries=10,
+                        navigation_mode=navigation_mode,
+                        aircraft_altitude=aircraft_altitude
                     )
                     
                     problems.append(problem)

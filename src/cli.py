@@ -108,6 +108,15 @@ Examples:
                             help='Vessel speed in knots for running fix (default: 0.0)')
     fix_parser.add_argument('--vessel-course', type=float, default=0.0,
                             help='Vessel course in degrees for running fix (default: 0.0)')
+    fix_parser.add_argument('--navigation-mode', default='marine',
+                           choices=['marine', 'aviation'],
+                           help='Navigation mode: marine or aviation (default: marine)')
+    fix_parser.add_argument('--aircraft-altitude', type=float, default=0.0,
+                           help='Aircraft altitude in meters (for aviation mode)')
+    fix_parser.add_argument('--aircraft-speed', type=float, default=0.0,
+                           help='Aircraft speed in knots (for aviation mode)')
+    fix_parser.add_argument('--aircraft-course', type=float, default=0.0,
+                           help='Aircraft course in degrees (for aviation mode)')
     fix_parser.add_argument('--output', '-o', default='position_fix.pdf', 
                             help='Output PDF filename (default: position_fix.pdf)')
     fix_parser.add_argument('--with-answers', action='store_true',
@@ -121,6 +130,17 @@ Examples:
                               help='Celestial body name (sun, moon, venus, etc.)')
     custom_parser.add_argument('--time', required=True,
                               help='Observation time (YYYY-MM-DDTHH:MM:SS)')
+    custom_parser.add_argument('--navigation-mode', default='marine',
+                              choices=['marine', 'aviation'],
+                              help='Navigation mode: marine or aviation (default: marine)')
+    custom_parser.add_argument('--aircraft-altitude', type=float, default=0.0,
+                              help='Aircraft altitude in meters (for aviation mode)')
+    custom_parser.add_argument('--aircraft-speed', type=float, default=0.0,
+                              help='Aircraft speed in knots (for aviation mode)')
+    custom_parser.add_argument('--aircraft-course', type=float, default=0.0,
+                              help='Aircraft course in degrees (for aviation mode)')
+    custom_parser.add_argument('--time-interval', type=float, default=0.0,
+                              help='Time interval from reference in hours (for aviation mode)')
     custom_parser.add_argument('--output', '-o', default='custom_sight.pdf', 
                                help='Output PDF filename (default: custom_sight.pdf)')
     custom_parser.add_argument('--with-answers', action='store_true',
@@ -227,10 +247,12 @@ def handle_generate_fix(args):
     """Handle generation of position fix from multiple sights."""
     print(f"Generating position fix from {args.bodies} sights...")
     
-    # Generate the problems
+    # Generate the problems with navigation mode and aviation parameters
     problems = generate_multi_body_sight_reduction_problems(
         num_bodies=args.bodies,
-        time_window_hours=args.time_window
+        time_window_hours=args.time_window,
+        navigation_mode=args.navigation_mode,
+        aircraft_altitude=args.aircraft_altitude
     )
     
     # Generate PDF
@@ -258,10 +280,12 @@ def handle_generate_custom(args):
         print(f"Error parsing time: {e}")
         return None
     
-    # Generate the problem
+    # Generate the problem with navigation mode and aviation parameters
     problem = generate_sight_reduction_problem(
         celestial_body_name=args.body,
-        observation_time=observation_time
+        observation_time=observation_time,
+        navigation_mode=args.navigation_mode,
+        aircraft_altitude=args.aircraft_altitude
     )
     
     # Generate PDF

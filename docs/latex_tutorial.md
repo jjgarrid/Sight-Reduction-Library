@@ -19,7 +19,18 @@ The Sight Reduction library includes LaTeX generation capabilities that allow yo
 - Single sight reduction worksheets
 - Nautical almanac pages
 - Multiple sight reduction worksheets for position fixes
+- Aviation-specific sight reduction worksheets (using bubble sextant observations)
+- Aviation almanac pages based on aviation navigation tables
 - All with professional formatting and proper celestial navigation notation
+
+### Aviation Support
+
+The LaTeX generation features also support aviation-specific sight reduction worksheets and almanac pages. These include:
+
+- Aviation-specific observation forms that account for bubble sextant use
+- Worksheets with appropriate fields for aircraft altitude, speed, and course
+- Aviation almanac pages with data formatted for Pub. No. 249 style tables
+- Forms that properly handle the absence of a visible horizon in aircraft navigation
 
 ## Installation Requirements
 
