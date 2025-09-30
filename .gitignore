@@ -5,6 +5,7 @@ AGENTS.md
 .cursor/ignore/**
 .github/ISSUE_TEMPLATE/**
 .openaibot/**
+.qwen/**
 
 # Python
 __pycache__/
